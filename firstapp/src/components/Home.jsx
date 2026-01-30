@@ -27,7 +27,7 @@ export default function Home() {
         if(res.status==200){
           Swal.fire({
   title: "Good job!",
-  text: "You clicked the button!",
+  text: "Product added to cart successfully!",
   icon: "success"
 });
 

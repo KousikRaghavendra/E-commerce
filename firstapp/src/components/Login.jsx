@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
+import Swal from "sweetalert2";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -19,8 +20,20 @@ export default function Login() {
         localStorage.setItem("userId", res.data.userId);
         localStorage.setItem("role", res.data.role);
         navigate("/");
+        Swal.fire({
+  title: "Success!",
+  text: "Logged in successfully!",
+  icon: "success"
+});
+
       }
     } catch (err) {
+      Swal.fire({
+  title: "Error!",
+  text: "Invalid email or password",
+  icon: "error"
+});
+      console.log("Login error: ", err);
       alert("Invalid email or password");
     }
   }

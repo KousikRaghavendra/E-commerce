@@ -1,4 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
+import Swal from "sweetalert2";
 
 export default function Navigation() {
   const navigate = useNavigate();

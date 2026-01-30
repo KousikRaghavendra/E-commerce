@@ -1,154 +1,226 @@
 import React, { useEffect, useState } from "react"
 import axios from "axios"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useLocation } from "react-router-dom"
+import Swal from "sweetalert2"
 
 function Cart() {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
+  const [limitMsg, setLimitMsg] = useState("")
 
-  const navigate = useNavigate()
   const userId = localStorage.getItem("userId")
+  const navigate = useNavigate()
+  const location = useLocation()
 
+  /* 🔄 Reload on user / route change */
   useEffect(() => {
     if (!userId) {
-      alert("Please login to view cart")
+      setItems([])
+      setLoading(false)
       navigate("/login")
       return
     }
-    fetchCart()
-  }, [])
 
-  // Fetch cart items for logged-in user
+    setItems([])
+    setLoading(true)
+    fetchCart()
+
+    return () => setItems([])
+  }, [location.pathname, userId])
+
   async function fetchCart() {
     try {
       const res = await axios.get(
         "http://localhost:4000/api/cart",
         { params: { userId } }
       )
-
       setItems(res.data?.items || [])
       setLoading(false)
     } catch (err) {
-      console.log("Error fetching cart", err)
+Swal.fire({
+  title: "Error!",
+  text: "Could not fetch cart items!",
+  icon: "error"
+});
+      console.log(err)
+      setItems([])
       setLoading(false)
     }
   }
 
-  // Increase quantity
-  async function increaseQty(productId) {
+  /* ⚡ FAST OPTIMISTIC UPDATE */
+  async function updateQty(productId, delta) {
+    setLimitMsg("")
+
+    setItems(prev =>
+      prev
+        .map(item =>
+          item.product._id === productId
+            ? { ...item, quantity: item.quantity + delta }
+            : item
+        )
+        .filter(item => item.quantity > 0)
+    )
+
     try {
-      await axios.post(
+      const res = await axios.post(
         "http://localhost:4000/api/cart/add",
-        { productId, quantity: 1 },
+        { productId, quantity: delta },
         { params: { userId } }
       )
-      fetchCart()
+
+      if (res.data.limitReached) {
+        Swal.fire({
+  title: "Limit Reached!",
+  text: "Cannot add more of this product!",
+  icon: "warning"
+});
+        setLimitMsg(`Limit reached! Only ${res.data.totalStock} available`)
+        fetchCart()
+      }
     } catch (err) {
-      console.log("Error increasing quantity", err)
+      fetchCart()
     }
   }
 
-  // Decrease quantity (min = 1)
-  async function decreaseQty(productId, qty) {
-    if (qty <= 1) return
-
-    try {
-      await axios.post(
-        "http://localhost:4000/api/cart/add",
-        { productId, quantity: -1 },
-        { params: { userId } }
-      )
-      fetchCart()
-    } catch (err) {
-      console.log("Error decreasing quantity", err)
-    }
+  if (loading) {
+    return <h2 style={{ textAlign: "center", marginTop: "60px" }}>Loading...</h2>
   }
-
-  if (loading) return <h2>Loading cart...</h2>
 
   if (items.length === 0) {
     return (
-      <div style={{ padding: "20px" }}>
-        <h2>Your cart is empty</h2>
-        <button onClick={() => navigate("/")}>
-          Go Shopping
-        </button>
+      <div className="cart-empty">
+        <h2>Your cart is empty 🛒</h2>
+        <button onClick={() => navigate("/")}>Go Shopping</button>
+        <style>{styles}</style>
       </div>
     )
   }
 
-  // Calculate total price
-  const totalAmount = items.reduce(
-    (sum, item) =>
-      sum + item.product.price * item.quantity,
+  const total = items.reduce(
+    (sum, item) => sum + item.product.price * item.quantity,
     0
   )
 
   return (
-    <div style={{ padding: "20px" }}>
+    <div className="cart-page">
       <h2>Your Cart</h2>
 
-      {/* Same grid style as Home.jsx */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "20px" }}>
-        {items.map((item) => (
-          <div
-            key={item.product._id}
-            style={{
-              border: "1px solid #ccc",
-              padding: "15px",
-              width: "250px"
-            }}
-          >
+      {limitMsg && <p className="limit-msg">{limitMsg}</p>}
+
+      <div className="cart-grid">
+        {items.map(item => (
+          <div key={item.product._id} className="cart-card">
             <h3>{item.product.name}</h3>
             <p>₹ {item.product.price}</p>
 
-            {/* Quantity Controls */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "10px",
-                marginTop: "10px"
-              }}
-            >
+            <div className="qty-row">
               <button
-                disabled={item.quantity <= 1}
-                onClick={() =>
-                  decreaseQty(item.product._id, item.quantity)
-                }
+                className="qty-btn minus"
+                onClick={() => updateQty(item.product._id, -1)}
               >
                 −
               </button>
 
-              <strong>{item.quantity}</strong>
+              <span>{item.quantity}</span>
 
               <button
-                onClick={() => increaseQty(item.product._id)}
+                className="qty-btn plus"
+                onClick={() => updateQty(item.product._id, 1)}
               >
                 +
               </button>
             </div>
 
-            <p style={{ marginTop: "10px" }}>
-              Subtotal: ₹{" "}
-              {item.product.price * item.quantity}
-            </p>
+            <p>Subtotal: ₹ {item.product.price * item.quantity}</p>
           </div>
         ))}
       </div>
 
-      <hr style={{ margin: "20px 0" }} />
+      <div className="cart-summary">
+        <h3>Total: ₹ {total}</h3>
+        <button className="checkout-btn">Checkout</button>
+      </div>
 
-      <h3>Total Amount: ₹ {totalAmount}</h3>
-
-      <button
-        style={{ marginTop: "10px", padding: "8px 15px" }}
-        onClick={() => alert("Checkout coming soon 🚀")}
-      >
-        Checkout
-      </button>
+      <style>{styles}</style>
     </div>
   )
 }
 
 export default Cart
+
+/* ================= GLASSMORPHIC CSS ================= */
+const styles = `
+.cart-page {
+  min-height: 100vh;
+  padding: 30px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: #fff;
+}
+
+.cart-grid {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.cart-card {
+  width: 260px;
+  padding: 18px;
+  border-radius: 16px;
+  background: rgba(255,255,255,0.15);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+}
+
+.qty-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.qty-btn {
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.qty-btn.minus { background: #ff4d4d; }
+.qty-btn.plus { background: #4caf50; }
+
+.cart-summary {
+  margin-top: 30px;
+  padding: 20px;
+  border-radius: 16px;
+  background: rgba(0,0,0,0.3);
+  display: flex;
+  justify-content: space-between;
+}
+
+.checkout-btn {
+  padding: 10px 22px;
+  border-radius: 12px;
+  border: none;
+  background: #00e5ff;
+  font-weight: bold;
+}
+
+.limit-msg {
+  color: #ffeb3b;
+  margin-bottom: 15px;
+}
+
+.cart-empty {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+`

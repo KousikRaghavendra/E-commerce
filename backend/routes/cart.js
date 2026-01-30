@@ -4,19 +4,17 @@ const router = express.Router()
 const Cart = require("../models/Cart")
 const Product = require("../models/Product")
 
-// Auth middleware (unchanged)
+/* ================= AUTH ================= */
 const isAuthenticated = (req, res, next) => {
   const userId = req.query.userId
-
   if (!userId) {
     return res.status(401).json({ message: "Unauthorized" })
   }
-
   req.userId = userId
   next()
 }
 
-// GET cart (unchanged)
+/* ================= GET CART ================= */
 router.get("/", isAuthenticated, async (req, res) => {
   try {
     const cart = await Cart
@@ -29,58 +27,70 @@ router.get("/", isAuthenticated, async (req, res) => {
 
     return res.status(200).json(cart)
   } catch (err) {
-    console.log(err)
+    console.log("fetch cart error", err)
     return res.status(500).json({ message: "Server error" })
   }
 })
 
-// ADD / UPDATE cart (MAIN LOGIC KEPT)
+/* ================= ADD / UPDATE CART ================= */
 router.post("/add", isAuthenticated, async (req, res) => {
   const { productId, quantity } = req.body
 
   try {
     let cart = await Cart.findOne({ user: req.userId })
-
     if (!cart) {
-      cart = new Cart({
-        user: req.userId,
-        items: []
-      })
+      cart = new Cart({ user: req.userId, items: [] })
     }
+
+    const product = await Product.findById(productId)
+    if (!product) {
+      return res.status(404).json({ message: "Product not found" })
+    }
+
+    const totalStock = product.stock
+    let limitReached = false
 
     const existingItem = cart.items.find(
       item => item.product.toString() === productId
     )
 
     if (existingItem) {
-      // 🔧 SAFE FIX (no logic change)
       existingItem.quantity += quantity
 
-      // prevent 0 or negative quantity
+      if (existingItem.quantity > totalStock) {
+        existingItem.quantity = totalStock
+        limitReached = true
+      }
+
       if (existingItem.quantity < 1) {
         existingItem.quantity = 1
       }
     } else {
-      // new item (only if quantity > 0)
-      if (quantity > 0) {
-        cart.items.push({
-          product: productId,
-          quantity
-        })
+      if (quantity > totalStock) {
+        limitReached = true
       }
+
+      cart.items.push({
+        product: productId,
+        quantity: Math.min(quantity, totalStock)
+      })
     }
 
     await cart.save()
 
+    const finalQty =
+      cart.items.find(i => i.product.toString() === productId)?.quantity || 0
+
     return res.status(200).json({
-      message: "Cart updated successfully",
-      cart
+      message: limitReached ? "Stock limit reached" : "Added to cart",
+      limitReached,
+      totalStock,
+      currentInCart: finalQty,
+      remaining: Math.max(totalStock - finalQty, 0)
     })
   } catch (err) {
-    console.log("cart error", err)
-    return res.status(500).json({
-      message: "Internal server error"
-    })
+    console.log("cart update error", err)
+    return res.status(500).json({ message: "Server error" })
   }
 })
 

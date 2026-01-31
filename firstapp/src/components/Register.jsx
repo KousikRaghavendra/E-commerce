@@ -25,7 +25,7 @@ export default function Register() {
 
     try {
       const res = await axios.post(
-        "http://localhost:4000/api/create-user",
+        "https://e-commerce-ych6.onrender.com/api/create-user",
         newUser
       );
 

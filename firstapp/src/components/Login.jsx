@@ -11,7 +11,7 @@ export default function Login() {
   async function handleLogin(e) {
     e.preventDefault();
     try {
-      const res = await axios.post("http://localhost:4000/api/login", {
+      const res = await axios.post("https://e-commerce-ych6.onrender.com/api/login", {
         email,
         password,
       });

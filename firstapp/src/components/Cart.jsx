@@ -31,7 +31,7 @@ function Cart() {
   async function fetchCart() {
     try {
       const res = await axios.get(
-        "http://localhost:4000/api/cart",
+        "https://e-commerce-ych6.onrender.com/api/cart",
         { params: { userId } }
       )
       setItems(res.data?.items || [])
@@ -64,7 +64,7 @@ Swal.fire({
 
     try {
       const res = await axios.post(
-        "http://localhost:4000/api/cart/add",
+        "https://e-commerce-ych6.onrender.com/api/cart/add",
         { productId, quantity: delta },
         { params: { userId } }
       )
